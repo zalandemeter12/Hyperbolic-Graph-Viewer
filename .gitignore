@@ -1,3 +1,7 @@
+#Ide
+./vs
+.vs/
+
 # Prerequisites
 *.d
 

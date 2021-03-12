@@ -1,0 +1,13 @@
+﻿  Skeleton.cpp
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\git\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\framework.h(167,17): warning C4996: 'fopen': This function or variable may be unsafe. Consider using fopen_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\git\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(87,36): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\git\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(103,36): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\git\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(103,30): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\git\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(237,12): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\git\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(238,14): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+  Generating code
+  2 of 125 functions ( 1.6%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    7 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Skeleton.vcxproj -> C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\git\Hyperbolic-Graph-Viewer\Programs\Skeleton\bin\Skeleton.exe
