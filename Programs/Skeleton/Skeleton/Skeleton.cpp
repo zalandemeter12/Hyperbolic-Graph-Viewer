@@ -39,10 +39,10 @@ const char * const vertexSource = R"(
 	precision highp float;		// normal floats, makes no difference on desktop computers
 
 	uniform mat4 MVP;			// uniform variable, the Model-View-Projection transformation matrix
-	layout(location = 0) in vec2 vp;	// Varying input: vp = vertex position is expected in attrib array 0
+	layout(location = 0) in vec3 vp;	// Varying input: vp = vertex position is expected in attrib array 0
 	
 	void main() {
-		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;		// transform vp from modeling space to normalized device space
+		gl_Position = vec4(vp.x/vp.z, vp.y/vp.z, 0, 1) * MVP;		// transform vp from modeling space to normalized device space
 	}
 )";
 
@@ -59,7 +59,23 @@ const char * const fragmentSource = R"(
 	}
 )";
 
+vec3 beltramiKleinInv(vec2 a) {
+	try {
+		float winv = sqrt(1 - a.x * a.x - a.y * a.y);
+		return vec3(a.x / winv, a.y / winv, 1 / winv);
+	}
+	catch (const std::exception&) {
+		printf("Noninvertible Exception");
+	}
+}
 
+float lorentzProduct(vec3 a, vec3 b) {
+	return a.x * b.x + a.y * b.y - a.z * b.z;
+}
+
+float hyperbolicDistance(vec3 a, vec3 b) {
+	return acosh(-lorentzProduct(a, b));
+}
 
 GPUProgram gpuProgram;	// vertex and fragment shaders
 
@@ -71,8 +87,8 @@ public:
 
 	vec3 vertices[NUM_OF_VERTICES];
 	vec2 connections[NUM_OF_CONNECTIONS];
-	float arrayV[NUM_OF_VERTICES * 2];
-	float arrayC[NUM_OF_CONNECTIONS * 4];
+
+	vec3 connected[NUM_OF_CONNECTIONS * 2];
 
 	Graph() {
 		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
@@ -82,7 +98,6 @@ public:
 			float y = MIN + (float)(rand()) / ((float)(RAND_MAX / (MAX - MIN)));
 			vertices[i] = vec3(x, y, sqrt(x * x + y * y + 1));
 		}
-		
 		int i = 0; int idx = 0;
 		while (i < NUM_OF_CONNECTIONS) {
 			int idx1 = rand() % NUM_OF_VERTICES, idx2 = rand() % NUM_OF_VERTICES;
@@ -98,22 +113,14 @@ public:
 			connections[idx++] = vec2(idx1, idx2);
 			++i;
 		}
-
-		beltramiKlein();
+		updateConnected();
 	}
 
-	void beltramiKlein() {
-		int idxV = 0;
-		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
-			arrayV[idxV++] = vertices[i].x / vertices[i].z;
-			arrayV[idxV++] = vertices[i].y / vertices[i].z;
-		}
+	void updateConnected() {
 		int idxC = 0;
 		for (int i = 0; i < NUM_OF_CONNECTIONS; ++i) {
-			arrayC[idxC++] = vertices[(const int)connections[i].x].x / vertices[(const int)connections[i].x].z;
-			arrayC[idxC++] = vertices[(const int)connections[i].x].y / vertices[(const int)connections[i].x].z;
-			arrayC[idxC++] = vertices[(const int)connections[i].y].x / vertices[(const int)connections[i].y].z;
-			arrayC[idxC++] = vertices[(const int)connections[i].y].y / vertices[(const int)connections[i].y].z;
+			connected[idxC++] = vertices[(const int)connections[i].x];
+			connected[idxC++] = vertices[(const int)connections[i].y];
 		}
 	}
 
@@ -134,28 +141,29 @@ public:
 	void draw() {
 		glClearColor(0, 0, 0, 0);
 		glClear(GL_COLOR_BUFFER_BIT);
-
-		mat4 MVPTransform = { 1, 0, 0, 0,    // MVP matrix, 
-							  0, 1, 0, 0,    // row-major!
+		mat4 MVPTransform = { 1, 0, 0, 0, 
+							  0, 1, 0, 0,
 							  0, 0, 1, 0,
 							  0, 0, 0, 1 };
-
 		gpuProgram.setUniform(MVPTransform, "MVP");
 		int location = glGetUniformLocation(gpuProgram.getId(), "color");
 		
 		glBindVertexArray(vao0);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(arrayV), arrayV, GL_DYNAMIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * NUM_OF_VERTICES, vertices, GL_DYNAMIC_DRAW);
 		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+		
 		glUniform3f(location, 1.0f, 0.0f, 0.0f);
 		glDrawArrays(GL_POINTS, 0, NUM_OF_VERTICES);
 
 		glBindVertexArray(vao1);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(arrayC), arrayC, GL_DYNAMIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * NUM_OF_CONNECTIONS * 2, connected, GL_DYNAMIC_DRAW);
 		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+		
 		glUniform3f(location, 1.0f, 1.0f, 0.0f);
 		glDrawArrays(GL_LINES, 0, NUM_OF_CONNECTIONS * 2);
+		
 		glutSwapBuffers();
 	}
 
@@ -213,28 +221,16 @@ public:
 				}
 			}
 			R = R / M;
+			R.z = sqrt(R.x * R.x + R.y * R.y + 1);
 			vertices[sorted[i]] = R;
 		}
+		updateConnected();
 	}
 
-	vec3 beltramiKleinInv(vec2 a) {
-		try {
-			float winv = sqrt(1 - a.x * a.x - a.y * a.y);
-			return vec3(a.x / winv, a.y / winv, 1 / winv);
-		}
-		catch (const std::exception&) {
-			printf("Noninvertible Exception");
-		}
+	void dynamicSimulation() {
+		
+		updateConnected();
 	}
-
-	float lorentzProduct(vec3 a, vec3 b) {
-		return a.x * b.x + a.y * b.y - a.z * b.z;
-	}
-
-	float hyperbolicDistance(vec3 a, vec3 b) {
-		return acosh(-lorentzProduct(a,b));
-	}
-
 };
 
 Graph graph;
@@ -251,6 +247,8 @@ void onDisplay() {
 }
 
 bool startClustering = false;
+bool startDynamicSimulation = false;
+int simulationCycle = 50;
 
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
@@ -275,25 +273,32 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 	
 	startPoint = endPoint;
 	endPoint = vec2(cX, cY);
-	float tmpX = abs((endPoint - startPoint).x) <= FLT_MIN ? 0.0002 : (endPoint - startPoint).x;
-	float tmpY = abs((endPoint - startPoint).y) <= FLT_MIN ? 0.0002 : (endPoint - startPoint).y;
+
+	float tmpX = abs((endPoint - startPoint).x) <= FLT_MIN ? 0.0001727 : (endPoint - startPoint).x;
+	float tmpY = abs((endPoint - startPoint).y) <= FLT_MIN ? 0.0001727 : (endPoint - startPoint).y;
+	if (abs((endPoint - startPoint).x) <= FLT_MIN && (endPoint - startPoint).x < 0) { tmpX *= -1; }
+	if (abs((endPoint - startPoint).y) <= FLT_MIN && (endPoint - startPoint).y < 0) { tmpY *= -1; }
+
 	vec2 shiftPoint2D = vec2(tmpX, tmpY);
-	vec3 shiftPointHyperbolic = graph.beltramiKleinInv(shiftPoint2D);
+	//vec2 shiftPoint2D = endPoint - startPoint;
+
+	vec3 shiftPointHyperbolic = beltramiKleinInv(shiftPoint2D);
 	vec3 hyperbolaBottom = vec3(0, 0, 1);
-	float shiftVectorDistance = graph.hyperbolicDistance(shiftPointHyperbolic, hyperbolaBottom);
+	float shiftVectorDistance = hyperbolicDistance(shiftPointHyperbolic, hyperbolaBottom);
 	vec3 shiftVectorVelocity = (shiftPointHyperbolic - hyperbolaBottom * cosh(shiftVectorDistance)) / sinh(shiftVectorDistance);
 	vec3 mirrorPoint1 = hyperbolaBottom * cosh(shiftVectorDistance * 0.25) + shiftVectorVelocity * sinh(shiftVectorDistance * 0.25);
 	vec3 mirrorPoint2 = hyperbolaBottom * cosh(shiftVectorDistance * 0.75) + shiftVectorVelocity * sinh(shiftVectorDistance * 0.75);
 	for (int i = 0; i < graph.NUM_OF_VERTICES; ++i) {
-		float mp1Distance = graph.hyperbolicDistance(mirrorPoint1, graph.vertices[i]);
+		float mp1Distance = hyperbolicDistance(mirrorPoint1, graph.vertices[i]);
 		vec3 mp1Velocity = (mirrorPoint1 - graph.vertices[i] * cosh(mp1Distance)) / sinh(mp1Distance);
 		vec3 vertexMirrored1 = graph.vertices[i] * cosh(2 * mp1Distance) + mp1Velocity * sinh(2 * mp1Distance);
-		float mp2Distance = graph.hyperbolicDistance(mirrorPoint2, vertexMirrored1);
+		float mp2Distance = hyperbolicDistance(mirrorPoint2, vertexMirrored1);
 		vec3 mp2Velocity = (mirrorPoint2 - vertexMirrored1 * cosh(mp2Distance)) / sinh(mp2Distance);
 		vec3 vertexMirrored2 = vertexMirrored1 * cosh(2 * mp2Distance) + mp2Velocity * sinh(2 * mp2Distance);
 		graph.vertices[i] = vertexMirrored2;
 	}
-	graph.beltramiKlein();
+	graph.updateConnected();
+	graph.draw();
 }
 
 // Mouse click event
@@ -303,7 +308,7 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 	float cY = 1.0f - 2.0f * pY / windowHeight;
 
 	if (button == GLUT_LEFT_BUTTON) {
-		if (state == GLUT_DOWN) { startPoint = vec2(cX, cY); endPoint = vec2(cX, cY); }
+		if (state == GLUT_DOWN) { startPoint = vec2(cX, cY); endPoint = vec2(cX + 0.0001727, cY + 0.0001727); }
 	}
 }
 
@@ -312,8 +317,13 @@ void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 	if (startClustering) {
 		graph.kMeansClustering();
-		graph.beltramiKlein();
+		graph.draw();
 		startClustering = false;
 	}
-	graph.draw();
+
+	if (startDynamicSimulation && simulationCycle > 0) {
+		graph.dynamicSimulation();
+		graph.draw();
+		simulationCycle--;
+	}
 }
