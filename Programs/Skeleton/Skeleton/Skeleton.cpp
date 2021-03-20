@@ -32,7 +32,7 @@
 // negativ elojellel szamoljak el es ezzel parhuzamosan eljaras is indul velem szemben.
 //=============================================================================================
 #include "framework.h"
-
+#define FLT_MIN          1.175494351e-38F        // min normalized positive value
 // vertex shader in GLSL: It is a Raw string (C++11) since it contains new line characters
 const char * const vertexSource = R"(
 	#version 330				// Shader 3.3
@@ -61,7 +61,7 @@ const char * const fragmentSource = R"(
 
 vec3 beltramiKleinInv(vec2 a) {
 	try {
-		float winv = sqrt(1 - a.x * a.x - a.y * a.y);
+		float winv = sqrtf(1 - a.x * a.x - a.y * a.y);
 		return vec3(a.x / winv, a.y / winv, 1 / winv);
 	}
 	catch (const std::exception&) {
@@ -74,7 +74,12 @@ float lorentzProduct(vec3 a, vec3 b) {
 }
 
 float hyperbolicDistance(vec3 a, vec3 b) {
-	return acosh(-lorentzProduct(a, b));
+	if (_isnan(acoshf(-lorentzProduct(a, b)))) {
+		return 0;
+	}
+	else {
+		return acoshf(-lorentzProduct(a, b));
+	}
 }
 
 GPUProgram gpuProgram;	// vertex and fragment shaders
@@ -87,7 +92,7 @@ public:
 
 	vec3 vertices[NUM_OF_VERTICES];
 	vec2 connections[NUM_OF_CONNECTIONS];
-
+	vec3 velocities[NUM_OF_VERTICES];
 	vec3 connected[NUM_OF_CONNECTIONS * 2];
 
 	Graph() {
@@ -114,6 +119,25 @@ public:
 			++i;
 		}
 		updateConnected();
+	}
+
+	void correctCoordinates() {
+		for (int i = 0; i < NUM_OF_CONNECTIONS; ++i) {
+			float tmp = 1;
+			if (vertices[i].x < 0) tmp = -1;
+			if (fabs(vertices[i].x) < FLT_MIN) tmp *= 0.000173;
+			else tmp = vertices[i].x;
+			vertices[i].x = tmp;
+
+			tmp = 1;
+			if (vertices[i].y < 0) tmp = -1;
+			if (fabs(vertices[i].y) < FLT_MIN) tmp *= 0.000173;
+			else tmp = vertices[i].y;
+			vertices[i].y = tmp;
+
+			if (vertices[i].z < FLT_MIN) vertices[i].z = 0.000173;
+			vertices[i].z = sqrtf(vertices[i].x * vertices[i].x + vertices[i].y * vertices[i].y + 1);
+		}
 	}
 
 	void updateConnected() {
@@ -208,7 +232,7 @@ public:
 	void kMeansClustering() {
 		int* sorted = bubbleSortIdx();
 		for (int i = 0; i < 50; ++i) {
-			int M = 0; vec3 R(0,0,0);
+			int M = 0; vec3 R(0, 0, 0);
 			for (int j = 0; j < 50; ++j) {
 				if (sorted[i] == j) continue;
 				if (isConnected(vertices[sorted[i]], vertices[j])) {
@@ -221,14 +245,89 @@ public:
 				}
 			}
 			R = R / M;
-			R.z = sqrt(R.x * R.x + R.y * R.y + 1);
+			R.z = sqrtf(R.x * R.x + R.y * R.y + 1);
 			vertices[sorted[i]] = R;
 		}
+		correctCoordinates();
 		updateConnected();
 	}
 
-	void dynamicSimulation() {
-		
+	vec3 Fe(vec3 from, vec3 to) {
+
+		float dist = hyperbolicDistance(from, to);
+		float optDist = 0.3;
+		float func = 20 * (dist - optDist) / (dist);
+		if (func < -1) func = -1;
+
+		vec3 Fe = (to - from * coshf(dist)) / sinhf(dist) * func;
+		if (isinf(Fe.x) || isinf(Fe.y) || isinf(Fe.z) ||
+			abs(Fe.x) <= FLT_MIN || abs(Fe.y) <= FLT_MIN || abs(Fe.z) <= FLT_MIN) {
+			Fe = 0.000173;
+		}
+		return Fe;
+	}
+
+	vec3 Fn(vec3 from, vec3 to) {
+
+		float dist = hyperbolicDistance(from, to);
+		float optDist = 0.3;
+		float func = 20 * (-optDist) / pow(dist,3);
+		if (func < -1) func = -1;
+
+		vec3 Fn = (to - from * coshf(dist)) / sinhf(dist) * func;
+		if (isinf(Fn.x) || isinf(Fn.y) || isinf(Fn.z) ||
+			abs(Fn.x) <= FLT_MIN || abs(Fn.y) <= FLT_MIN || abs(Fn.z) <= FLT_MIN) {
+			Fn = 0.000173;
+		}
+		return Fn;
+	}
+
+	vec3 Fo(vec3 from) {
+		float dist = hyperbolicDistance(from, vec3(0, 0, 1));
+		float func = 20 * exp(1.5 * dist - 3);
+
+		vec3 Fo = (vec3(0, 0, 1) - from * coshf(dist)) / sinhf(dist) * func;
+		if (isinf(Fo.x) || isinf(Fo.y) || isinf(Fo.z) ||
+			abs(Fo.x) <= FLT_MIN || abs(Fo.y) <= FLT_MIN || abs(Fo.z) <= FLT_MIN) {
+			Fo = 0.000173;
+		}
+		return Fo;
+	}
+
+	void dynamicSimulation(float dt, float simulationCycle) {
+		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
+			vec3 Fi = vec3(0, 0, 0);
+			for (int j = 0; j < NUM_OF_VERTICES; ++j) {
+				if (i == j) continue;
+				if (isConnected(vertices[i], vertices[j])) {
+					Fi = Fi + Fe(vertices[i], vertices[j]);
+				}
+				else {
+					Fi = Fi + Fn(vertices[i], vertices[j]);
+				}
+			}
+			Fi = Fi + Fo(vertices[i]);
+			
+			int rho = pow(length(velocities[i]), 2);
+			Fi = Fi - velocities[i] * rho;
+			
+			if (isinf(Fi.x) || isinf(Fi.y) || isinf(Fi.z) ||
+				abs(Fi.x) <= FLT_MIN || abs(Fi.y) <= FLT_MIN || abs(Fi.z) <= FLT_MIN) {
+				Fi = 0.000173;
+			}
+
+			int m = 1;
+			velocities[i] = (velocities[i] + Fi / m * dt) * 0.95;
+
+			float dist = length(velocities[i]) * dt;
+			vec3 newVertex = vertices[i] * coshf(dist) + normalize(velocities[i]) * sinhf(dist);
+			vec3 newVelocity = -length(velocities[i]) * normalize((vertices[i] - newVertex * coshf(dist)) / sinhf(dist));
+
+			vertices[i] = newVertex;
+			velocities[i] = newVelocity;
+			
+		}
+		correctCoordinates();
 		updateConnected();
 	}
 };
@@ -248,13 +347,17 @@ void onDisplay() {
 
 bool startClustering = false;
 bool startDynamicSimulation = false;
-int simulationCycle = 50;
+float simulationCycle = 0;
 
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == 'd') glutPostRedisplay();         // if d, invalidate display, i.e. redraw
 	if (key == ' ') {
+		for (int i = 0; i < graph.NUM_OF_VERTICES; ++i) {
+			graph.velocities[i] = vec3(0, 0, 0);
+		}
 		startClustering = true;
+		startDynamicSimulation = true;
 	}
 }
 
@@ -264,6 +367,7 @@ void onKeyboardUp(unsigned char key, int pX, int pY) {
 
 vec2 startPoint(0,0);
 vec2 endPoint(0,0);
+int mouseBtn = -1;
 
 // Move mouse with key pressed
 void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
@@ -271,34 +375,35 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 	float cY = 1.0f - 2.0f * pY / windowHeight;
 	
-	startPoint = endPoint;
-	endPoint = vec2(cX, cY);
+	if (mouseBtn == GLUT_RIGHT_BUTTON) {
+		startPoint = endPoint;
+		endPoint = vec2(cX, cY);
 
-	float tmpX = abs((endPoint - startPoint).x) <= FLT_MIN ? 0.0001727 : (endPoint - startPoint).x;
-	float tmpY = abs((endPoint - startPoint).y) <= FLT_MIN ? 0.0001727 : (endPoint - startPoint).y;
-	if (abs((endPoint - startPoint).x) <= FLT_MIN && (endPoint - startPoint).x < 0) { tmpX *= -1; }
-	if (abs((endPoint - startPoint).y) <= FLT_MIN && (endPoint - startPoint).y < 0) { tmpY *= -1; }
-
-	vec2 shiftPoint2D = vec2(tmpX, tmpY);
-	//vec2 shiftPoint2D = endPoint - startPoint;
-
-	vec3 shiftPointHyperbolic = beltramiKleinInv(shiftPoint2D);
-	vec3 hyperbolaBottom = vec3(0, 0, 1);
-	float shiftVectorDistance = hyperbolicDistance(shiftPointHyperbolic, hyperbolaBottom);
-	vec3 shiftVectorVelocity = (shiftPointHyperbolic - hyperbolaBottom * cosh(shiftVectorDistance)) / sinh(shiftVectorDistance);
-	vec3 mirrorPoint1 = hyperbolaBottom * cosh(shiftVectorDistance * 0.25) + shiftVectorVelocity * sinh(shiftVectorDistance * 0.25);
-	vec3 mirrorPoint2 = hyperbolaBottom * cosh(shiftVectorDistance * 0.75) + shiftVectorVelocity * sinh(shiftVectorDistance * 0.75);
-	for (int i = 0; i < graph.NUM_OF_VERTICES; ++i) {
-		float mp1Distance = hyperbolicDistance(mirrorPoint1, graph.vertices[i]);
-		vec3 mp1Velocity = (mirrorPoint1 - graph.vertices[i] * cosh(mp1Distance)) / sinh(mp1Distance);
-		vec3 vertexMirrored1 = graph.vertices[i] * cosh(2 * mp1Distance) + mp1Velocity * sinh(2 * mp1Distance);
-		float mp2Distance = hyperbolicDistance(mirrorPoint2, vertexMirrored1);
-		vec3 mp2Velocity = (mirrorPoint2 - vertexMirrored1 * cosh(mp2Distance)) / sinh(mp2Distance);
-		vec3 vertexMirrored2 = vertexMirrored1 * cosh(2 * mp2Distance) + mp2Velocity * sinh(2 * mp2Distance);
-		graph.vertices[i] = vertexMirrored2;
+		float tmpX = abs((endPoint - startPoint).x) <= FLT_MIN ? 0.000173 : (endPoint - startPoint).x;
+		float tmpY = abs((endPoint - startPoint).y) <= FLT_MIN ? 0.000173 : (endPoint - startPoint).y;
+		if (abs((endPoint - startPoint).x) <= FLT_MIN && (endPoint - startPoint).x < 0) { tmpX *= -1; }
+		if (abs((endPoint - startPoint).y) <= FLT_MIN && (endPoint - startPoint).y < 0) { tmpY *= -1; }
+		
+		vec2 shiftPoint2D(tmpX, tmpY);
+		vec3 shiftPointHyperbolic = beltramiKleinInv(shiftPoint2D);
+		vec3 hyperbolaBottom = vec3(0, 0, 1);
+		float shiftVectorDistance = hyperbolicDistance(shiftPointHyperbolic, hyperbolaBottom);
+		vec3 shiftVectorVelocity = (shiftPointHyperbolic - hyperbolaBottom * coshf(shiftVectorDistance)) / sinhf(shiftVectorDistance);
+		vec3 mirrorPoint1 = hyperbolaBottom * coshf(shiftVectorDistance * 0.25) + shiftVectorVelocity * sinhf(shiftVectorDistance * 0.25);
+		vec3 mirrorPoint2 = hyperbolaBottom * coshf(shiftVectorDistance * 0.75) + shiftVectorVelocity * sinhf(shiftVectorDistance * 0.75);
+		for (int i = 0; i < graph.NUM_OF_VERTICES; ++i) {
+			float mp1Distance = hyperbolicDistance(mirrorPoint1, graph.vertices[i]);
+			vec3 mp1Velocity = (mirrorPoint1 - graph.vertices[i] * coshf(mp1Distance)) / sinhf(mp1Distance);
+			vec3 vertexMirrored1 = graph.vertices[i] * coshf(2 * mp1Distance) + mp1Velocity * sinhf(2 * mp1Distance);
+			float mp2Distance = hyperbolicDistance(mirrorPoint2, vertexMirrored1);
+			vec3 mp2Velocity = (mirrorPoint2 - vertexMirrored1 * coshf(mp2Distance)) / sinhf(mp2Distance);
+			vec3 vertexMirrored2 = vertexMirrored1 * coshf(2 * mp2Distance) + mp2Velocity * sinhf(2 * mp2Distance);
+			graph.vertices[i] = vertexMirrored2;
+		}
+		graph.correctCoordinates();
+		graph.updateConnected();
+		graph.draw();
 	}
-	graph.updateConnected();
-	graph.draw();
 }
 
 // Mouse click event
@@ -306,13 +411,14 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 	// Convert to normalized device space
 	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 	float cY = 1.0f - 2.0f * pY / windowHeight;
-
-	if (button == GLUT_LEFT_BUTTON) {
-		if (state == GLUT_DOWN) { startPoint = vec2(cX, cY); endPoint = vec2(cX + 0.0001727, cY + 0.0001727); }
+	
+	mouseBtn = -1;
+	if (button == GLUT_RIGHT_BUTTON) {
+		if (state == GLUT_DOWN) { mouseBtn = GLUT_RIGHT_BUTTON;  startPoint = vec2(cX, cY); endPoint = vec2(cX + 0.0001727, cY + 0.0001727); }
 	}
 }
 
-// Idle event indicating that some time elapsed: do animation here
+int i = 0;
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 	if (startClustering) {
@@ -320,10 +426,15 @@ void onIdle() {
 		graph.draw();
 		startClustering = false;
 	}
-
-	if (startDynamicSimulation && simulationCycle > 0) {
-		graph.dynamicSimulation();
+	float T = 10, dt = 0.01;
+	if (startDynamicSimulation && simulationCycle < T) {
+		graph.dynamicSimulation(dt, simulationCycle);
+		if (i % 10 == 0) graph.draw();
+		simulationCycle+=dt;
+		++i;
+	} else if (simulationCycle >= T) {
 		graph.draw();
-		simulationCycle--;
+		simulationCycle = 0;
+		startDynamicSimulation = false;
 	}
 }
