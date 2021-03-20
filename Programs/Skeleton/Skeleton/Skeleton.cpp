@@ -32,7 +32,9 @@
 // negativ elojellel szamoljak el es ezzel parhuzamosan eljaras is indul velem szemben.
 //=============================================================================================
 #include "framework.h"
+
 #define FLT_MIN          1.175494351e-38F        // min normalized positive value
+
 // vertex shader in GLSL: It is a Raw string (C++11) since it contains new line characters
 const char * const vertexSource = R"(
 	#version 330				// Shader 3.3
@@ -84,14 +86,20 @@ float hyperbolicDistance(vec3 a, vec3 b) {
 
 GPUProgram gpuProgram;	// vertex and fragment shaders
 
-class Graph {
-	unsigned int vao0, vao1;
-public:
-	static const int NUM_OF_VERTICES = 50;
-	static const int NUM_OF_CONNECTIONS = 61;
+struct Pair {
+	unsigned int x, y;
+	Pair(unsigned int x0 = 0, unsigned int y0 = 0) { x = x0; y = y0; }
+};
 
+static const int NUM_OF_VERTICES = 50;
+static const int NUM_OF_CONNECTIONS = 61;
+
+class Graph {	
+private:
+	unsigned int vao0, vao1;
+	Pair connections[NUM_OF_CONNECTIONS];
+public:
 	vec3 vertices[NUM_OF_VERTICES];
-	vec2 connections[NUM_OF_CONNECTIONS];
 	vec3 velocities[NUM_OF_VERTICES];
 	vec3 connected[NUM_OF_CONNECTIONS * 2];
 
@@ -101,7 +109,7 @@ public:
 			float MAX = 1, MIN = -MAX; 
 			float x = MIN + (float)(rand()) / ((float)(RAND_MAX / (MAX - MIN)));
 			float y = MIN + (float)(rand()) / ((float)(RAND_MAX / (MAX - MIN)));
-			vertices[i] = vec3(x, y, sqrt(x * x + y * y + 1));
+			vertices[i] = vec3(x, y, sqrtf(x * x + y * y + 1));
 		}
 		int i = 0; int idx = 0;
 		while (i < NUM_OF_CONNECTIONS) {
@@ -115,7 +123,7 @@ public:
 				}
 			}
 			if (inConnections) continue;
-			connections[idx++] = vec2(idx1, idx2);
+			connections[idx++] = Pair(idx1, idx2);
 			++i;
 		}
 		updateConnected();
@@ -134,18 +142,20 @@ public:
 			if (fabs(vertices[i].y) < FLT_MIN) tmp *= 0.000173;
 			else tmp = vertices[i].y;
 			vertices[i].y = tmp;
-
-			if (vertices[i].z < FLT_MIN) vertices[i].z = 0.000173;
-			vertices[i].z = sqrtf(vertices[i].x * vertices[i].x + vertices[i].y * vertices[i].y + 1);
+			
+			vertices[i].z = sqrtf(vertices[i].x * vertices[i].x + vertices[i].y * vertices[i].y + 1);		
 		}
 	}
 
 	void updateConnected() {
 		int idxC = 0;
 		for (int i = 0; i < NUM_OF_CONNECTIONS; ++i) {
-			connected[idxC++] = vertices[(const int)connections[i].x];
-			connected[idxC++] = vertices[(const int)connections[i].y];
+			connected[idxC++] = vertices[connections[i].x];
+			connected[idxC++] = vertices[connections[i].y];
+
+			//printf("%d,%d\n", (const int)connections[i].x, (const int)connections[i].y);
 		}
+		//printf("--------------------------------\n");
 	}
 
 	void create() {
@@ -194,8 +204,8 @@ public:
 	bool isConnected(const vec3 a, const vec3 b) {
 		bool connected = false;
 		for (int l = 0; l < NUM_OF_CONNECTIONS; ++l) {
-			const int idx1 = (const int)connections[l].x;
-			const int idx2 = (const int)connections[l].y;
+			const int idx1 = connections[l].x;
+			const int idx2 = connections[l].y;
 			if ((vertices[idx1].x == a.x && vertices[idx1].y == a.y && vertices[idx2].x == b.x && vertices[idx2].y == b.y) ||
 				(vertices[idx1].x == b.x && vertices[idx1].y == b.y && vertices[idx2].x == a.x && vertices[idx2].y == a.y)) {
 				connected = true;
@@ -261,8 +271,8 @@ public:
 
 		vec3 Fe = (to - from * coshf(dist)) / sinhf(dist) * func;
 		if (isinf(Fe.x) || isinf(Fe.y) || isinf(Fe.z) ||
-			abs(Fe.x) <= FLT_MIN || abs(Fe.y) <= FLT_MIN || abs(Fe.z) <= FLT_MIN) {
-			Fe = 0.000173;
+			fabs(Fe.x) <= FLT_MIN || fabs(Fe.y) <= FLT_MIN || fabs(Fe.z) <= FLT_MIN) {
+			Fe = 0;
 		}
 		return Fe;
 	}
@@ -276,8 +286,8 @@ public:
 
 		vec3 Fn = (to - from * coshf(dist)) / sinhf(dist) * func;
 		if (isinf(Fn.x) || isinf(Fn.y) || isinf(Fn.z) ||
-			abs(Fn.x) <= FLT_MIN || abs(Fn.y) <= FLT_MIN || abs(Fn.z) <= FLT_MIN) {
-			Fn = 0.000173;
+			fabs(Fn.x) <= FLT_MIN || fabs(Fn.y) <= FLT_MIN || fabs(Fn.z) <= FLT_MIN) {
+			Fn = 0;
 		}
 		return Fn;
 	}
@@ -288,8 +298,8 @@ public:
 
 		vec3 Fo = (vec3(0, 0, 1) - from * coshf(dist)) / sinhf(dist) * func;
 		if (isinf(Fo.x) || isinf(Fo.y) || isinf(Fo.z) ||
-			abs(Fo.x) <= FLT_MIN || abs(Fo.y) <= FLT_MIN || abs(Fo.z) <= FLT_MIN) {
-			Fo = 0.000173;
+			fabs(Fo.x) <= FLT_MIN || fabs(Fo.y) <= FLT_MIN || fabs(Fo.z) <= FLT_MIN) {
+			Fo = 0;
 		}
 		return Fo;
 	}
@@ -310,11 +320,6 @@ public:
 			
 			int rho = pow(length(velocities[i]), 2);
 			Fi = Fi - velocities[i] * rho;
-			
-			if (isinf(Fi.x) || isinf(Fi.y) || isinf(Fi.z) ||
-				abs(Fi.x) <= FLT_MIN || abs(Fi.y) <= FLT_MIN || abs(Fi.z) <= FLT_MIN) {
-				Fi = 0.000173;
-			}
 
 			int m = 1;
 			velocities[i] = (velocities[i] + Fi / m * dt) * 0.95;
@@ -348,14 +353,27 @@ void onDisplay() {
 bool startClustering = false;
 bool startDynamicSimulation = false;
 float simulationCycle = 0;
+int drawCycle = 0;
+float T = 10, dt = 0.01;
 
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
-	if (key == 'd') glutPostRedisplay();         // if d, invalidate display, i.e. redraw
+	if (key == 'd' || key == 'D') {
+		startClustering = false;
+		startDynamicSimulation = false;
+		simulationCycle = 0;
+		drawCycle = 0;
+		graph = Graph();
+		graph.create();
+		graph.draw();
+		glutPostRedisplay();
+	}// if d, invalidate display, i.e. redraw
 	if (key == ' ') {
-		for (int i = 0; i < graph.NUM_OF_VERTICES; ++i) {
+		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
 			graph.velocities[i] = vec3(0, 0, 0);
 		}
+		simulationCycle = 0;
+		drawCycle = 0;
 		startClustering = true;
 		startDynamicSimulation = true;
 	}
@@ -375,14 +393,14 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 	float cY = 1.0f - 2.0f * pY / windowHeight;
 	
-	if (mouseBtn == GLUT_RIGHT_BUTTON) {
+	if (mouseBtn == GLUT_RIGHT_BUTTON && !startClustering && !startDynamicSimulation) {
 		startPoint = endPoint;
 		endPoint = vec2(cX, cY);
 
-		float tmpX = abs((endPoint - startPoint).x) <= FLT_MIN ? 0.000173 : (endPoint - startPoint).x;
-		float tmpY = abs((endPoint - startPoint).y) <= FLT_MIN ? 0.000173 : (endPoint - startPoint).y;
-		if (abs((endPoint - startPoint).x) <= FLT_MIN && (endPoint - startPoint).x < 0) { tmpX *= -1; }
-		if (abs((endPoint - startPoint).y) <= FLT_MIN && (endPoint - startPoint).y < 0) { tmpY *= -1; }
+		float tmpX = fabs((endPoint - startPoint).x) <= FLT_MIN ? 0.000173 : (endPoint - startPoint).x;
+		float tmpY = fabs((endPoint - startPoint).y) <= FLT_MIN ? 0.000173 : (endPoint - startPoint).y;
+		if (fabs((endPoint - startPoint).x) <= FLT_MIN && (endPoint - startPoint).x < 0) { tmpX *= -1; }
+		if (fabs((endPoint - startPoint).y) <= FLT_MIN && (endPoint - startPoint).y < 0) { tmpY *= -1; }
 		
 		vec2 shiftPoint2D(tmpX, tmpY);
 		vec3 shiftPointHyperbolic = beltramiKleinInv(shiftPoint2D);
@@ -391,7 +409,7 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 		vec3 shiftVectorVelocity = (shiftPointHyperbolic - hyperbolaBottom * coshf(shiftVectorDistance)) / sinhf(shiftVectorDistance);
 		vec3 mirrorPoint1 = hyperbolaBottom * coshf(shiftVectorDistance * 0.25) + shiftVectorVelocity * sinhf(shiftVectorDistance * 0.25);
 		vec3 mirrorPoint2 = hyperbolaBottom * coshf(shiftVectorDistance * 0.75) + shiftVectorVelocity * sinhf(shiftVectorDistance * 0.75);
-		for (int i = 0; i < graph.NUM_OF_VERTICES; ++i) {
+		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
 			float mp1Distance = hyperbolicDistance(mirrorPoint1, graph.vertices[i]);
 			vec3 mp1Velocity = (mirrorPoint1 - graph.vertices[i] * coshf(mp1Distance)) / sinhf(mp1Distance);
 			vec3 vertexMirrored1 = graph.vertices[i] * coshf(2 * mp1Distance) + mp1Velocity * sinhf(2 * mp1Distance);
@@ -400,6 +418,7 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 			vec3 vertexMirrored2 = vertexMirrored1 * coshf(2 * mp2Distance) + mp2Velocity * sinhf(2 * mp2Distance);
 			graph.vertices[i] = vertexMirrored2;
 		}
+
 		graph.correctCoordinates();
 		graph.updateConnected();
 		graph.draw();
@@ -418,20 +437,17 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 	}
 }
 
-int i = 0;
 void onIdle() {
-	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 	if (startClustering) {
 		graph.kMeansClustering();
 		graph.draw();
 		startClustering = false;
 	}
-	float T = 10, dt = 0.01;
 	if (startDynamicSimulation && simulationCycle < T) {
 		graph.dynamicSimulation(dt, simulationCycle);
-		if (i % 10 == 0) graph.draw();
+		if (drawCycle % 10 == 0) graph.draw();
 		simulationCycle+=dt;
-		++i;
+		++drawCycle;
 	} else if (simulationCycle >= T) {
 		graph.draw();
 		simulationCycle = 0;
