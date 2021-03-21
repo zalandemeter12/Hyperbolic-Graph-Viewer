@@ -33,9 +33,11 @@
 //=============================================================================================
 #include "framework.h"
 
-#define FLT_MIN          1.175494351e-38F        // min normalized positive value
+#define FLT_MIN				1.175494351e-38F        // min normalized positive value (used for coordinate corrections)
+#define NUM_OF_VERTICES		50						// number of vertices
+#define NUM_OF_CONNECTIONS	61						// number of connections
 
-// vertex shader in GLSL: It is a Raw string (C++11) since it contains new line characters
+// vertex shader in GLSL
 const char * const vertexSource = R"(
 	#version 330				// Shader 3.3
 	precision highp float;		// normal floats, makes no difference on desktop computers
@@ -61,49 +63,39 @@ const char * const fragmentSource = R"(
 	}
 )";
 
-vec3 beltramiKleinInv(vec2 a) {
-	try {
-		float winv = sqrtf(1 - a.x * a.x - a.y * a.y);
-		return vec3(a.x / winv, a.y / winv, 1 / winv);
-	}
-	catch (const std::exception&) {
-		printf("Noninvertible Exception");
-	}
-}
-
-float lorentzProduct(vec3 a, vec3 b) {
-	return a.x * b.x + a.y * b.y - a.z * b.z;
-}
-
-float hyperbolicDistance(vec3 a, vec3 b) {
-	if (_isnan(acoshf(-lorentzProduct(a, b)))) {
-		return 0;
-	}
-	else {
-		return acoshf(-lorentzProduct(a, b));
-	}
-}
-
 GPUProgram gpuProgram;	// vertex and fragment shaders
 
-struct Pair {
-	unsigned int x, y;
-	Pair(unsigned int x0 = 0, unsigned int y0 = 0) { x = x0; y = y0; }
-};
 
-static const int NUM_OF_VERTICES = 50;
-static const int NUM_OF_CONNECTIONS = 61;
+
 
 class Graph {	
 private:
+	struct Pair {
+		unsigned int x, y;
+		Pair(unsigned int x0 = 0, unsigned int y0 = 0) { x = x0; y = y0; }
+		inline bool operator==(const Pair& p) {
+			if ((x == p.x && y == p.y) || (x == p.y && y == p.x)) return true;
+			else return false;
+		}
+	};
 	unsigned int vao0, vao1;
 	Pair connections[NUM_OF_CONNECTIONS];
-public:
 	vec3 vertices[NUM_OF_VERTICES];
 	vec3 velocities[NUM_OF_VERTICES];
 	vec3 connected[NUM_OF_CONNECTIONS * 2];
+public:
+	bool startClustering = false;
+	bool startDynamicSimulation = false;
+	float simulationCycle = 0;
+	int drawCycle = 0;
+	int drawCount = 20;
+	float T = 10, dt = 0.01;
+	int rho = 1;
+	int m = 1;
+	float damping = 0.95;
 
 	Graph() {
+		vao0 = NULL; vao1 = NULL;
 		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
 			//Random number generation from stackoverflow https://stackoverflow.com/questions/686353/random-float-number-generation
 			float MAX = 1, MIN = -MAX; 
@@ -111,39 +103,35 @@ public:
 			float y = MIN + (float)(rand()) / ((float)(RAND_MAX / (MAX - MIN)));
 			vertices[i] = vec3(x, y, sqrtf(x * x + y * y + 1));
 		}
-		int i = 0; int idx = 0;
+		int i = 0;
 		while (i < NUM_OF_CONNECTIONS) {
 			int idx1 = rand() % NUM_OF_VERTICES, idx2 = rand() % NUM_OF_VERTICES;
 			if (idx1 == idx2) continue;
-			bool inConnections = false;
-			for (int j = 0; j < NUM_OF_CONNECTIONS; ++j) {
-				if ((connections[j].x == idx1 && connections[j].y == idx2) || (connections[j].x == idx2 && connections[j].y == idx1)) {
-					inConnections = true;
-					break;
-				}
-			}
-			if (inConnections) continue;
-			connections[idx++] = Pair(idx1, idx2);
+			if (inConnections(Pair(idx1, idx2))) continue;
+			connections[i] = Pair(idx1, idx2);
 			++i;
 		}
-		updateConnected();
+	}
+
+	bool inConnections(Pair p) {
+		for (int j = 0; j < NUM_OF_CONNECTIONS; ++j)
+			if (p == connections[j])
+				return true;
+		return false;
+	}
+
+	void initVelocities() {
+		for (int i = 0; i < NUM_OF_VERTICES; ++i)
+			velocities[i] = vec3(0, 0, 0);
 	}
 
 	void correctCoordinates() {
 		for (int i = 0; i < NUM_OF_CONNECTIONS; ++i) {
-			float tmp = 1;
-			if (vertices[i].x < 0) tmp = -1;
-			if (fabs(vertices[i].x) < FLT_MIN) tmp *= 0.000173;
-			else tmp = vertices[i].x;
-			vertices[i].x = tmp;
-
-			tmp = 1;
-			if (vertices[i].y < 0) tmp = -1;
-			if (fabs(vertices[i].y) < FLT_MIN) tmp *= 0.000173;
-			else tmp = vertices[i].y;
-			vertices[i].y = tmp;
-			
-			vertices[i].z = sqrtf(vertices[i].x * vertices[i].x + vertices[i].y * vertices[i].y + 1);		
+			float tmpX = fabs(vertices[i].x) <= FLT_MIN ? 0.000173 : vertices[i].x;
+			float tmpY = fabs(vertices[i].y) <= FLT_MIN ? 0.000173 : vertices[i].y;
+			if (fabs(vertices[i].x) <= FLT_MIN && vertices[i].x < 0) { tmpX *= -1; }
+			if (fabs(vertices[i].y) <= FLT_MIN && vertices[i].y < 0) { tmpY *= -1; }
+			vertices[i] = vec3(tmpX, tmpY, sqrtf(tmpX * tmpX + tmpY * tmpY + 1));
 		}
 	}
 
@@ -152,10 +140,7 @@ public:
 		for (int i = 0; i < NUM_OF_CONNECTIONS; ++i) {
 			connected[idxC++] = vertices[connections[i].x];
 			connected[idxC++] = vertices[connections[i].y];
-
-			//printf("%d,%d\n", (const int)connections[i].x, (const int)connections[i].y);
 		}
-		//printf("--------------------------------\n");
 	}
 
 	void create() {
@@ -182,125 +167,113 @@ public:
 		gpuProgram.setUniform(MVPTransform, "MVP");
 		int location = glGetUniformLocation(gpuProgram.getId(), "color");
 		
+		correctCoordinates();
 		glBindVertexArray(vao0);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * NUM_OF_VERTICES, vertices, GL_DYNAMIC_DRAW);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-		
 		glUniform3f(location, 1.0f, 0.0f, 0.0f);
 		glDrawArrays(GL_POINTS, 0, NUM_OF_VERTICES);
 
+		updateConnected();
 		glBindVertexArray(vao1);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * NUM_OF_CONNECTIONS * 2, connected, GL_DYNAMIC_DRAW);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-		
 		glUniform3f(location, 1.0f, 1.0f, 0.0f);
 		glDrawArrays(GL_LINES, 0, NUM_OF_CONNECTIONS * 2);
 		
 		glutSwapBuffers();
 	}
 
+	float hyperbolicDistance(vec3 a, vec3 b) {
+		float lorentzProduct = a.x * b.x + a.y * b.y - a.z * b.z;
+		if (isnan(acoshf(-lorentzProduct))) return 0;
+		else return acoshf(-lorentzProduct);
+	}
+
+	void shiftVertices(vec3 from, vec3 to) {
+		float shiftVectorDistance = hyperbolicDistance(to, from);
+		vec3 shiftVectorVelocity = (to - from * coshf(shiftVectorDistance)) / sinhf(shiftVectorDistance);
+		vec3 mirrorPoint1 = from * coshf(shiftVectorDistance * 0.25) + shiftVectorVelocity * sinhf(shiftVectorDistance * 0.25);
+		vec3 mirrorPoint2 = from * coshf(shiftVectorDistance * 0.75) + shiftVectorVelocity * sinhf(shiftVectorDistance * 0.75);
+		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
+			float mp1Distance = hyperbolicDistance(mirrorPoint1, vertices[i]);
+			vec3 mp1Velocity = (mirrorPoint1 - vertices[i] * coshf(mp1Distance)) / sinhf(mp1Distance);
+			vec3 vertexMirrored1 = vertices[i] * coshf(2 * mp1Distance) + mp1Velocity * sinhf(2 * mp1Distance);
+			float mp2Distance = hyperbolicDistance(mirrorPoint2, vertexMirrored1);
+			vec3 mp2Velocity = (mirrorPoint2 - vertexMirrored1 * coshf(mp2Distance)) / sinhf(mp2Distance);
+			vec3 vertexMirrored2 = vertexMirrored1 * coshf(2 * mp2Distance) + mp2Velocity * sinhf(2 * mp2Distance);
+			vertices[i] = vertexMirrored2;
+		}
+		correctCoordinates();
+	}
+
 	bool isConnected(const vec3 a, const vec3 b) {
-		bool connected = false;
 		for (int l = 0; l < NUM_OF_CONNECTIONS; ++l) {
 			const int idx1 = connections[l].x;
 			const int idx2 = connections[l].y;
 			if ((vertices[idx1].x == a.x && vertices[idx1].y == a.y && vertices[idx2].x == b.x && vertices[idx2].y == b.y) ||
 				(vertices[idx1].x == b.x && vertices[idx1].y == b.y && vertices[idx2].x == a.x && vertices[idx2].y == a.y)) {
-				connected = true;
-				break;
+				return true;
 			}
 		}
-		return connected;
-	}
-	int numOfConnections(vec3 a) {
-		int c = 0;
-		for (int i = 0; i < NUM_OF_CONNECTIONS; ++i)
-			if (vertices[(const int)connections[i].x].x == a.x || vertices[(const int)connections[i].y].x == a.x)
-				c++;
-		return c;
-	}
-
-	int* bubbleSortIdx() {
-		static int sorted[NUM_OF_VERTICES];
-		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
-			sorted[i] = i;
-		}
-		for (int i = 0; i < NUM_OF_VERTICES - 1; i++) {
-			for (int j = 0; j < NUM_OF_VERTICES - i - 1; j++) {
-				if (numOfConnections(vertices[sorted[j]]) < numOfConnections(vertices[sorted[j + 1]])) {
-					int t = sorted[j];
-					sorted[j] = sorted[j + 1];
-					sorted[j + 1] = t;
-				}
-			}
-		}
-		return sorted;
+		return false;
 	}
 
 	void kMeansClustering() {
-		int* sorted = bubbleSortIdx();
-		for (int i = 0; i < 50; ++i) {
+		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
 			int M = 0; vec3 R(0, 0, 0);
-			for (int j = 0; j < 50; ++j) {
-				if (sorted[i] == j) continue;
-				if (isConnected(vertices[sorted[i]], vertices[j])) {
-					R = R + (+1) * vertices[j];
+			for (int j = 0; j < NUM_OF_VERTICES; ++j) {
+				if (i == j) continue;
+				if (isConnected(vertices[i], vertices[j])) {
+					R = R + vertices[j];
 					M++;
 				}
 				else {
-					R = R + (-1) * vertices[j];
+					R = R - vertices[j];
 					M--;
 				}
 			}
 			R = R / M;
 			R.z = sqrtf(R.x * R.x + R.y * R.y + 1);
-			vertices[sorted[i]] = R;
+			vertices[i] = R;
 		}
 		correctCoordinates();
-		updateConnected();
+	}
+
+	void handleForceErrors(vec3& F) {
+		if (fabs(F.x) < FLT_MIN || isinf(F.x) || isnan(F.x)) F.x = 0.0;
+		if (fabs(F.y) < FLT_MIN || isinf(F.y) || isnan(F.y)) F.y = 0.0;
+		if (fabs(F.z) < FLT_MIN || isinf(F.z) || isnan(F.z)) F.z = 0.0;
 	}
 
 	vec3 Fe(vec3 from, vec3 to) {
-
 		float dist = hyperbolicDistance(from, to);
 		float optDist = 0.3;
 		float func = 20 * (dist - optDist) / (dist);
 		if (func < -1) func = -1;
-
 		vec3 Fe = (to - from * coshf(dist)) / sinhf(dist) * func;
-		if (isinf(Fe.x) || isinf(Fe.y) || isinf(Fe.z) ||
-			fabs(Fe.x) <= FLT_MIN || fabs(Fe.y) <= FLT_MIN || fabs(Fe.z) <= FLT_MIN) {
-			Fe = 0;
-		}
+		handleForceErrors(Fe);
 		return Fe;
 	}
 
 	vec3 Fn(vec3 from, vec3 to) {
-
 		float dist = hyperbolicDistance(from, to);
 		float optDist = 0.3;
-		float func = 20 * (-optDist) / pow(dist,3);
+		float func = 20 * ((-1.0) * optDist) / pow(dist,3);
 		if (func < -1) func = -1;
-
 		vec3 Fn = (to - from * coshf(dist)) / sinhf(dist) * func;
-		if (isinf(Fn.x) || isinf(Fn.y) || isinf(Fn.z) ||
-			fabs(Fn.x) <= FLT_MIN || fabs(Fn.y) <= FLT_MIN || fabs(Fn.z) <= FLT_MIN) {
-			Fn = 0;
-		}
+		handleForceErrors(Fn);
 		return Fn;
 	}
 
 	vec3 Fo(vec3 from) {
 		float dist = hyperbolicDistance(from, vec3(0, 0, 1));
 		float func = 20 * exp(1.5 * dist - 3);
-
-		vec3 Fo = (vec3(0, 0, 1) - from * coshf(dist)) / sinhf(dist) * func;
-		if (isinf(Fo.x) || isinf(Fo.y) || isinf(Fo.z) ||
-			fabs(Fo.x) <= FLT_MIN || fabs(Fo.y) <= FLT_MIN || fabs(Fo.z) <= FLT_MIN) {
-			Fo = 0;
-		}
+		if (fabs(func) < FLT_MIN || isinf(func) || isnan(func)) return vec3(0, 0, 0);
+		vec3 Fo = (vec3(0, 0, 1) - from * coshf(hyperbolicDistance(from, vec3(0, 0, 1)))) / sinhf(hyperbolicDistance(from, vec3(0, 0, 1))) * func;
+		handleForceErrors(Fo);
 		return Fo;
 	}
 
@@ -317,23 +290,36 @@ public:
 				}
 			}
 			Fi = Fi + Fo(vertices[i]);
-			
-			int rho = pow(length(velocities[i]), 2);
 			Fi = Fi - velocities[i] * rho;
 
-			int m = 1;
-			velocities[i] = (velocities[i] + Fi / m * dt) * 0.95;
-
+			velocities[i] = (velocities[i] + Fi / m * dt) * damping;
 			float dist = length(velocities[i]) * dt;
+			
 			vec3 newVertex = vertices[i] * coshf(dist) + normalize(velocities[i]) * sinhf(dist);
 			vec3 newVelocity = -length(velocities[i]) * normalize((vertices[i] - newVertex * coshf(dist)) / sinhf(dist));
-
 			vertices[i] = newVertex;
 			velocities[i] = newVelocity;
-			
 		}
 		correctCoordinates();
-		updateConnected();
+	}
+
+	void controlSimulation() {
+		if (startClustering) {
+			kMeansClustering();
+			draw();
+			startClustering = false;
+		}
+		if (startDynamicSimulation && simulationCycle < T) {
+			dynamicSimulation(dt, simulationCycle);
+			if (drawCycle % drawCount == 0) draw();
+			simulationCycle += dt;
+			++drawCycle;
+		}
+		else if (simulationCycle >= T) {
+			simulationCycle = 0;
+			startDynamicSimulation = false;
+			draw();
+		}
 	}
 };
 
@@ -350,32 +336,20 @@ void onDisplay() {
 	graph.draw();
 }
 
-bool startClustering = false;
-bool startDynamicSimulation = false;
-float simulationCycle = 0;
-int drawCycle = 0;
-float T = 10, dt = 0.01;
-
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
 	if (key == 'd' || key == 'D') {
-		startClustering = false;
-		startDynamicSimulation = false;
-		simulationCycle = 0;
-		drawCycle = 0;
 		graph = Graph();
 		graph.create();
 		graph.draw();
 		glutPostRedisplay();
 	}// if d, invalidate display, i.e. redraw
 	if (key == ' ') {
-		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
-			graph.velocities[i] = vec3(0, 0, 0);
-		}
-		simulationCycle = 0;
-		drawCycle = 0;
-		startClustering = true;
-		startDynamicSimulation = true;
+		graph.initVelocities();
+		graph.simulationCycle = 0;
+		graph.drawCycle = 0;
+		graph.startClustering = true;
+		graph.startDynamicSimulation = true;
 	}
 }
 
@@ -393,7 +367,7 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 	float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 	float cY = 1.0f - 2.0f * pY / windowHeight;
 	
-	if (mouseBtn == GLUT_RIGHT_BUTTON && !startClustering && !startDynamicSimulation) {
+	if (mouseBtn == GLUT_RIGHT_BUTTON) {
 		startPoint = endPoint;
 		endPoint = vec2(cX, cY);
 
@@ -403,24 +377,11 @@ void onMouseMotion(int pX, int pY) {	// pX, pY are the pixel coordinates of the 
 		if (fabs((endPoint - startPoint).y) <= FLT_MIN && (endPoint - startPoint).y < 0) { tmpY *= -1; }
 		
 		vec2 shiftPoint2D(tmpX, tmpY);
-		vec3 shiftPointHyperbolic = beltramiKleinInv(shiftPoint2D);
-		vec3 hyperbolaBottom = vec3(0, 0, 1);
-		float shiftVectorDistance = hyperbolicDistance(shiftPointHyperbolic, hyperbolaBottom);
-		vec3 shiftVectorVelocity = (shiftPointHyperbolic - hyperbolaBottom * coshf(shiftVectorDistance)) / sinhf(shiftVectorDistance);
-		vec3 mirrorPoint1 = hyperbolaBottom * coshf(shiftVectorDistance * 0.25) + shiftVectorVelocity * sinhf(shiftVectorDistance * 0.25);
-		vec3 mirrorPoint2 = hyperbolaBottom * coshf(shiftVectorDistance * 0.75) + shiftVectorVelocity * sinhf(shiftVectorDistance * 0.75);
-		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
-			float mp1Distance = hyperbolicDistance(mirrorPoint1, graph.vertices[i]);
-			vec3 mp1Velocity = (mirrorPoint1 - graph.vertices[i] * coshf(mp1Distance)) / sinhf(mp1Distance);
-			vec3 vertexMirrored1 = graph.vertices[i] * coshf(2 * mp1Distance) + mp1Velocity * sinhf(2 * mp1Distance);
-			float mp2Distance = hyperbolicDistance(mirrorPoint2, vertexMirrored1);
-			vec3 mp2Velocity = (mirrorPoint2 - vertexMirrored1 * coshf(mp2Distance)) / sinhf(mp2Distance);
-			vec3 vertexMirrored2 = vertexMirrored1 * coshf(2 * mp2Distance) + mp2Velocity * sinhf(2 * mp2Distance);
-			graph.vertices[i] = vertexMirrored2;
-		}
-
-		graph.correctCoordinates();
-		graph.updateConnected();
+		//Beltrami-Klein inverse
+		float winv = sqrtf(1 - shiftPoint2D.x * shiftPoint2D.x - shiftPoint2D.y * shiftPoint2D.y);
+		vec3 shiftPointHyperbolic = vec3(shiftPoint2D.x / winv, shiftPoint2D.y / winv, 1 / winv);
+		
+		graph.shiftVertices(vec3(0, 0, 1),shiftPointHyperbolic);
 		graph.draw();
 	}
 }
@@ -433,24 +394,10 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 	
 	mouseBtn = -1;
 	if (button == GLUT_RIGHT_BUTTON) {
-		if (state == GLUT_DOWN) { mouseBtn = GLUT_RIGHT_BUTTON;  startPoint = vec2(cX, cY); endPoint = vec2(cX + 0.0001727, cY + 0.0001727); }
+		if (state == GLUT_DOWN) { mouseBtn = GLUT_RIGHT_BUTTON;  startPoint = vec2(cX, cY); endPoint = vec2(cX, cY); }
 	}
 }
 
 void onIdle() {
-	if (startClustering) {
-		graph.kMeansClustering();
-		graph.draw();
-		startClustering = false;
-	}
-	if (startDynamicSimulation && simulationCycle < T) {
-		graph.dynamicSimulation(dt, simulationCycle);
-		if (drawCycle % 10 == 0) graph.draw();
-		simulationCycle+=dt;
-		++drawCycle;
-	} else if (simulationCycle >= T) {
-		graph.draw();
-		simulationCycle = 0;
-		startDynamicSimulation = false;
-	}
+	graph.controlSimulation();
 }
