@@ -1,5 +1,5 @@
 //=============================================================================================
-// Mintaprogram: Zöld háromszög. Ervenyes 2019. osztol.
+// Mintaprogram: Zï¿½ld hï¿½romszï¿½g. Ervenyes 2019. osztol.
 //
 // A beadott program csak ebben a fajlban lehet, a fajl 1 byte-os ASCII karaktereket tartalmazhat, BOM kihuzando.
 // Tilos:
@@ -18,7 +18,7 @@
 //
 // NYILATKOZAT
 // ---------------------------------------------------------------------------------------------
-// Nev    : Demeter Zalán
+// Nev    : Demeter Zalï¿½n
 // Neptun : VERF1U
 // ---------------------------------------------------------------------------------------------
 // ezennel kijelentem, hogy a feladatot magam keszitettem, es ha barmilyen segitseget igenybe vettem vagy
@@ -42,31 +42,39 @@ const char * const vertexSource = R"(
 	#version 330				// Shader 3.3
 	precision highp float;		// normal floats, makes no difference on desktop computers
 
-	uniform mat4 MVP;			// uniform variable, the Model-View-Projection transformation matrix
-	layout(location = 0) in vec3 vp;	// Varying input: vp = vertex position is expected in attrib array 0
-	
+	uniform mat4 MVP;								// uniform variable, the Model-View-Projection transformation matrix
+	layout(location = 0) in vec3 vp;				// Varying input: vp = vertex position is expected in attrib array 0
+	layout(location = 1) in vec2 vertexUV;			// Attrib Array 1
+
+	out vec2 texCoord;								// output attribute
+
 	void main() {
+		texCoord = vertexUV;
 		gl_Position = vec4(vp.x/vp.z, vp.y/vp.z, 0, 1) * MVP;		// transform vp from modeling space to normalized device space
 	}
 )";
 
 // fragment shader in GLSL
-const char * const fragmentSource = R"(
-	#version 330			// Shader 3.3
-	precision highp float;	// normal floats, makes no difference on desktop computers
-	
+const char* fragmentSource = R"(
+	#version 330
+	precision highp float;
+
+	uniform int isTextured;
+	uniform sampler2D texturer;
 	uniform vec3 color;		// uniform variable, the color of the primitive
-	out vec4 outColor;		// computed color of the current pixel
+	in vec2 texCoord;			// variable input: interpolated texture coordinates
+	out vec4 outColor;		// output that goes to the raster memory as told by glBindFragDataLocation
 
 	void main() {
-		outColor = vec4(color, 1);	// computed color is the color of the primitive
+		if (isTextured != 0) {
+			outColor = texture(texturer, texCoord);
+		} else {
+			outColor = vec4(color, 1);	// computed color is the color of the primitive
+		}
 	}
 )";
 
 GPUProgram gpuProgram;	// vertex and fragment shaders
-
-
-
 
 class Graph {	
 private:
@@ -79,28 +87,31 @@ private:
 		}
 	};
 	unsigned int vao0, vao1;
+	unsigned int vbo0;
+	unsigned int vbo1[2];
 	Pair connections[NUM_OF_CONNECTIONS];
 	vec3 vertices[NUM_OF_VERTICES];
 	vec3 velocities[NUM_OF_VERTICES];
 	vec3 connected[NUM_OF_CONNECTIONS * 2];
+	float colors[NUM_OF_VERTICES][6];
 public:
 	bool startClustering = false;
 	bool startDynamicSimulation = false;
 	float simulationCycle = 0;
 	int drawCycle = 0;
-	int drawCount = 20;
-	float T = 10, dt = 0.01;
-	int rho = 1;
+	int drawCount = 2;
+	float T = 8;
+	float dt = 0.05;
+	int rho = 2;
 	int m = 1;
 	float damping = 0.95;
 
 	Graph() {
+		srand(1257789818522);
 		vao0 = NULL; vao1 = NULL;
 		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
-			//Random number generation from stackoverflow https://stackoverflow.com/questions/686353/random-float-number-generation
-			float MAX = 1, MIN = -MAX; 
-			float x = MIN + (float)(rand()) / ((float)(RAND_MAX / (MAX - MIN)));
-			float y = MIN + (float)(rand()) / ((float)(RAND_MAX / (MAX - MIN)));
+			float x = randomNumber(1,-1);
+			float y = randomNumber(1, -1);
 			vertices[i] = vec3(x, y, sqrtf(x * x + y * y + 1));
 		}
 		int i = 0;
@@ -111,6 +122,35 @@ public:
 			connections[i] = Pair(idx1, idx2);
 			++i;
 		}
+
+		int j = 0;
+		while (j <NUM_OF_VERTICES) {
+			colors[j][0] = randomNumber(1, 0);
+			colors[j][1] = randomNumber(1, 0);
+			colors[j][2] = randomNumber(1, 0);
+			colors[j][3] = randomNumber(1, 0);
+			colors[j][4] = randomNumber(1, 0);
+			colors[j][5] = randomNumber(1, 0);
+			bool tooClose = false;
+			for (int k = 0; k < j; k += 6) {
+				if (colorDistance(k, j) < 1.2) { tooClose = true; break; }
+			}
+			if (tooClose) continue;
+			
+			++j;
+		}
+		
+	}
+
+	float colorDistance(int i, int j) {
+		float tmp1 = pow(colors[i][0] - colors[j][0], 2) + pow(colors[i][1] - colors[j][1], 2) + pow(colors[i][2] - colors[j][2], 2);
+		float tmp2 = pow(colors[i][3] - colors[j][3], 2) + pow(colors[i][4] - colors[j][4], 2) + pow(colors[i][5] - colors[j][5], 2);
+		return tmp1 + tmp2;
+	}
+
+	float randomNumber(float HI, float LO) {
+		//Random number generation from stackoverflow https://stackoverflow.com/questions/686353/random-float-number-generation
+		return LO + static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / (HI - LO)));
 	}
 
 	bool inConnections(Pair p) {
@@ -143,49 +183,6 @@ public:
 		}
 	}
 
-	void create() {
-		glGenVertexArrays(1, &vao0);
-		glBindVertexArray(vao0);
-		unsigned int vbo0;
-		glGenBuffers(1, &vbo0);
-		glBindBuffer(GL_ARRAY_BUFFER, vbo0);
-
-		glGenVertexArrays(1, &vao1);
-		glBindVertexArray(vao1);
-		unsigned int vbo1;
-		glGenBuffers(1, &vbo1);
-		glBindBuffer(GL_ARRAY_BUFFER, vbo1);
-	}
-
-	void draw() {
-		glClearColor(0, 0, 0, 0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		mat4 MVPTransform = { 1, 0, 0, 0, 
-							  0, 1, 0, 0,
-							  0, 0, 1, 0,
-							  0, 0, 0, 1 };
-		gpuProgram.setUniform(MVPTransform, "MVP");
-		int location = glGetUniformLocation(gpuProgram.getId(), "color");
-		
-		correctCoordinates();
-		glBindVertexArray(vao0);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * NUM_OF_VERTICES, vertices, GL_DYNAMIC_DRAW);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-		glUniform3f(location, 1.0f, 0.0f, 0.0f);
-		glDrawArrays(GL_POINTS, 0, NUM_OF_VERTICES);
-
-		updateConnected();
-		glBindVertexArray(vao1);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * NUM_OF_CONNECTIONS * 2, connected, GL_DYNAMIC_DRAW);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
-		glUniform3f(location, 1.0f, 1.0f, 0.0f);
-		glDrawArrays(GL_LINES, 0, NUM_OF_CONNECTIONS * 2);
-		
-		glutSwapBuffers();
-	}
-
 	float hyperbolicDistance(vec3 a, vec3 b) {
 		float lorentzProduct = a.x * b.x + a.y * b.y - a.z * b.z;
 		if (isnan(acoshf(-lorentzProduct))) return 0;
@@ -193,19 +190,22 @@ public:
 	}
 
 	void shiftVertices(vec3 from, vec3 to) {
+		for (int i = 0; i < NUM_OF_VERTICES; ++i)
+			shiftVertex(from, to, vertices[i]);
+	}
+
+	void shiftVertex(vec3 from, vec3 to, vec3& vertex) {
 		float shiftVectorDistance = hyperbolicDistance(to, from);
 		vec3 shiftVectorVelocity = (to - from * coshf(shiftVectorDistance)) / sinhf(shiftVectorDistance);
 		vec3 mirrorPoint1 = from * coshf(shiftVectorDistance * 0.25) + shiftVectorVelocity * sinhf(shiftVectorDistance * 0.25);
 		vec3 mirrorPoint2 = from * coshf(shiftVectorDistance * 0.75) + shiftVectorVelocity * sinhf(shiftVectorDistance * 0.75);
-		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
-			float mp1Distance = hyperbolicDistance(mirrorPoint1, vertices[i]);
-			vec3 mp1Velocity = (mirrorPoint1 - vertices[i] * coshf(mp1Distance)) / sinhf(mp1Distance);
-			vec3 vertexMirrored1 = vertices[i] * coshf(2 * mp1Distance) + mp1Velocity * sinhf(2 * mp1Distance);
-			float mp2Distance = hyperbolicDistance(mirrorPoint2, vertexMirrored1);
-			vec3 mp2Velocity = (mirrorPoint2 - vertexMirrored1 * coshf(mp2Distance)) / sinhf(mp2Distance);
-			vec3 vertexMirrored2 = vertexMirrored1 * coshf(2 * mp2Distance) + mp2Velocity * sinhf(2 * mp2Distance);
-			vertices[i] = vertexMirrored2;
-		}
+		float mp1Distance = hyperbolicDistance(mirrorPoint1, vertex);
+		vec3 mp1Velocity = (mirrorPoint1 - vertex * coshf(mp1Distance)) / sinhf(mp1Distance);
+		vec3 vertexMirrored1 = vertex * coshf(2 * mp1Distance) + mp1Velocity * sinhf(2 * mp1Distance);
+		float mp2Distance = hyperbolicDistance(mirrorPoint2, vertexMirrored1);
+		vec3 mp2Velocity = (mirrorPoint2 - vertexMirrored1 * coshf(mp2Distance)) / sinhf(mp2Distance);
+		vec3 vertexMirrored2 = vertexMirrored1 * coshf(2 * mp2Distance) + mp2Velocity * sinhf(2 * mp2Distance);
+		vertex = vertexMirrored2;
 		correctCoordinates();
 	}
 
@@ -261,7 +261,7 @@ public:
 	vec3 Fn(vec3 from, vec3 to) {
 		float dist = hyperbolicDistance(from, to);
 		float optDist = 0.3;
-		float func = 20 * ((-1.0) * optDist) / pow(dist,3);
+		float func = 5 * ((-1.0) * optDist) / pow(dist,3);
 		if (func < -1) func = -1;
 		vec3 Fn = (to - from * coshf(dist)) / sinhf(dist) * func;
 		handleForceErrors(Fn);
@@ -270,8 +270,7 @@ public:
 
 	vec3 Fo(vec3 from) {
 		float dist = hyperbolicDistance(from, vec3(0, 0, 1));
-		float func = 20 * exp(1.5 * dist - 3);
-		if (fabs(func) < FLT_MIN || isinf(func) || isnan(func)) return vec3(0, 0, 0);
+		float func = 10   * exp(1.5 * dist - 3);
 		vec3 Fo = (vec3(0, 0, 1) - from * coshf(hyperbolicDistance(from, vec3(0, 0, 1)))) / sinhf(hyperbolicDistance(from, vec3(0, 0, 1))) * func;
 		handleForceErrors(Fo);
 		return Fo;
@@ -282,19 +281,15 @@ public:
 			vec3 Fi = vec3(0, 0, 0);
 			for (int j = 0; j < NUM_OF_VERTICES; ++j) {
 				if (i == j) continue;
-				if (isConnected(vertices[i], vertices[j])) {
-					Fi = Fi + Fe(vertices[i], vertices[j]);
-				}
-				else {
-					Fi = Fi + Fn(vertices[i], vertices[j]);
-				}
+				if (isConnected(vertices[i], vertices[j])) { Fi = Fi + Fe(vertices[i], vertices[j]); }
+				else { Fi = Fi + Fn(vertices[i], vertices[j]); }
 			}
 			Fi = Fi + Fo(vertices[i]);
 			Fi = Fi - velocities[i] * rho;
 
 			velocities[i] = (velocities[i] + Fi / m * dt) * damping;
 			float dist = length(velocities[i]) * dt;
-			
+
 			vec3 newVertex = vertices[i] * coshf(dist) + normalize(velocities[i]) * sinhf(dist);
 			vec3 newVelocity = -length(velocities[i]) * normalize((vertices[i] - newVertex * coshf(dist)) / sinhf(dist));
 			vertices[i] = newVertex;
@@ -321,6 +316,109 @@ public:
 			draw();
 		}
 	}
+
+	void create() {
+		glGenVertexArrays(1, &vao0);
+		glBindVertexArray(vao0);
+		glGenBuffers(1, &vbo0);
+
+		glGenVertexArrays(1, &vao1);
+		glBindVertexArray(vao1);
+		glGenBuffers(2, vbo1);
+	}
+
+	void draw() {
+		glClearColor(0, 0, 0, 0);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		int location = glGetUniformLocation(gpuProgram.getId(), "color");
+
+		mat4 MVPTransform = { 1, 0, 0, 0,
+							  0, 1, 0, 0,
+							  0, 0, 1, 0,
+							  0, 0, 0, 1 };
+		gpuProgram.setUniform(MVPTransform, "MVP");
+
+		correctCoordinates();
+		updateConnected();
+		gpuProgram.setUniform((int)false, "isTextured");
+		glBindVertexArray(vao0);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo0);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * NUM_OF_CONNECTIONS * 2, connected, GL_DYNAMIC_DRAW);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+		glUniform3f(location, 1.0f, 1.0f, 0.0f);
+		glDrawArrays(GL_LINES, 0, NUM_OF_CONNECTIONS * 2);
+
+		gpuProgram.setUniform((int)true, "isTextured");
+		glBindVertexArray(vao1);
+
+		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
+			const int nv = 50;
+			std::vector<vec4> vector; //stores image
+
+			float r = vertices[i].x / vertices[i].z;
+			float g = vertices[i].y / vertices[i].z;
+			float b = 1 / vertices[i].z;
+			for (int i = 0; i < 100 * 100; ++i) {
+				vec4 tmp(r + 0.35, g + 0.35, b + 0.35, 1);
+				
+				vector.push_back(tmp);
+			}
+
+			for (int x = 17; x < 83; ++x) {
+				for (int y = 17; y < 83; ++y) {
+					vector.at(x * 100 + y) = vec4(1,1,1,1);
+				}
+			}
+
+			for (int x = 25; x < 75; ++x) {
+				for (int y = 25; y < 75; ++y) {
+					if (y < x - 5) {
+						vector.at(x * 100 + y) = vec4(colors[i][0], colors[i][1], colors[i][2], 1);
+					}
+					if (y > x + 5) {
+						vector.at(x * 100 + y) = vec4(colors[i][3], colors[i][4], colors[i][5], 1);
+					}
+				}
+			}
+
+			Texture txt(100, 100, vector); //texture
+
+			gpuProgram.setUniform(txt, "texturer");
+
+			vec2 uvs[50];
+			for (int i = 0; i < nv; ++i) {
+				float fi = i * 2.0 * M_PI / nv;
+				uvs[i] = vec2(0.5, 0.5) + vec2(cosf(fi) * 0.5, sinf(fi) * 0.5);
+			}
+
+			glBindBuffer(GL_ARRAY_BUFFER, vbo1[1]);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(uvs), uvs, GL_DYNAMIC_DRAW);
+			glEnableVertexAttribArray(1);
+			glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+			vec3 circleVertices[nv];
+			for (int j = 0; j < nv; ++j) {
+				float fi = j * 2.0 * M_PI / nv;
+				vec3 tmp = vertices[i];
+				float r = 0.04;
+				float shiftX = cosf(fi) * r;
+				float shiftY = sinf(fi) * r;
+				shiftVertex(vec3(0, 0, 1), vec3(shiftX, shiftY, sqrtf(shiftX * shiftX + shiftY * shiftY + 1)), tmp);
+				circleVertices[j] = tmp;
+			}
+			glBindBuffer(GL_ARRAY_BUFFER, vbo1[0]);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * nv, circleVertices, GL_DYNAMIC_DRAW);
+			glEnableVertexAttribArray(0);
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+			glUniform3f(location, vertices[i].x / vertices[i].z, vertices[i].y / vertices[i].z, 1 / vertices[i].z);
+			glDrawArrays(GL_TRIANGLE_FAN, 0, nv);
+		}
+
+		glutSwapBuffers();
+	}
+
 };
 
 Graph graph;
@@ -329,6 +427,7 @@ void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
 	glPointSize(8); glLineWidth(1);
 	graph.create();
+
 	gpuProgram.create(vertexSource, fragmentSource, "outColor");
 }
 

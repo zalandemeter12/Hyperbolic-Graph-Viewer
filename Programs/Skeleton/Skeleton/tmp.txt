@@ -1,0 +1,3 @@
+std::vector<vec4> vector; //stores image
+
+			

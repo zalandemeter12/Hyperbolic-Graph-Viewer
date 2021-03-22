@@ -1,25 +1,37 @@
 ﻿  Skeleton.cpp
 C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\framework.h(167,17): warning C4996: 'fopen': This function or variable may be unsafe. Consider using fopen_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(92,19): warning C4305: 'initializing': truncation from 'double' to 'float'
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(95,16): warning C4305: 'initializing': truncation from 'double' to 'float'
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(130,15): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(131,15): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(198,56): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(198,114): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(199,56): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(199,114): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(104,11): warning C4305: 'initializing': truncation from 'double' to 'float'
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(107,16): warning C4305: 'initializing': truncation from 'double' to 'float'
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(110,1): warning C4305: 'argument': truncation from '__int64' to 'unsigned int'
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(110,9): warning C4309: 'argument': truncation of constant value
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(146,14): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(147,14): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(170,15): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(171,15): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(200,56): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(200,114): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(201,56): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(201,114): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
 C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(238,12): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
 C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(253,1): warning C4305: 'initializing': truncation from 'double' to 'float'
 C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(263,1): warning C4305: 'initializing': truncation from 'double' to 'float'
 C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(264,14): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
 C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(273,14): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(293,30): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(295,42): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(374,14): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(375,14): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(288,30): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(290,42): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(364,36): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(364,26): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(364,16): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(392,14): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(393,61): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(393,45): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(403,14): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(405,1): warning C4305: 'initializing': truncation from 'double' to 'float'
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(473,14): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\Skeleton\Skeleton.cpp(474,14): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
   Generating code
-  0 of 144 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+  1 of 201 functions ( 0.5%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    0 functions had inline decision re-evaluated but remain unchanged
+    4 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
   Skeleton.vcxproj -> C:\Users\Zalan\Documents\Dokumentumok\Coding\Grafika\Hyperbolic-Graph-Viewer\Programs\Skeleton\bin\Skeleton.exe
