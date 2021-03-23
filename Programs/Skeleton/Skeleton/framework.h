@@ -24,7 +24,7 @@
 #endif
 
 // Resolution of screen
-const unsigned int windowWidth = 800, windowHeight = 800;
+const unsigned int windowWidth = 600, windowHeight = 600;
 
 //--------------------------
 struct vec2 {
