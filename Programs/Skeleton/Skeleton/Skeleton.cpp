@@ -76,15 +76,14 @@ public:
 	bool startDynamicSimulation = false;
 	float simulationCycle = 0;
 	int drawCycle = 0;
-	int drawCount = 2;
-	float T = 8;
-	float dt = 0.05;
+	int drawCount = 10;
+	float T = 15;
+	float dt = 0.025;
 	int rho = 2;
 	int m = 1;
-	float damping = 0.95;
+	float damping = 0.975;
 
 	Graph() {
-		srand(1257789818522);
 		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
 			float x = randomFloat(-1, 1);
 			float y = randomFloat(-1, 1);
@@ -94,7 +93,7 @@ public:
 		while (i < NUM_OF_CONNECTIONS) {
 			int idx1 = rand() % NUM_OF_VERTICES, idx2 = rand() % NUM_OF_VERTICES;
 			if (idx1 == idx2) continue;
-			if (inConnections(Pair(idx1, idx2), connections)) continue;
+			if (isConnected(Pair(idx1, idx2), connections)) continue;
 			connections[i] = Pair(idx1, idx2);
 			++i;
 		}
@@ -114,7 +113,7 @@ public:
 		while (j < NUM_OF_VERTICES) {
 			int idx1 = rand() % numOfColors, idx2 = rand() % numOfColors;
 			if (idx1 == idx2) continue;
-			if (inConnections(Pair(idx1, idx2), colorPairs)) continue;
+			if (isConnected(Pair(idx1, idx2), colorPairs)) continue;
 			colorPairs[j] = Pair(idx1, idx2);
 			colors[j][0] = vec3(tmpColors[idx1].x, tmpColors[idx1].y, tmpColors[idx1].z);
 			colors[j][1] = vec3(tmpColors[idx2].x, tmpColors[idx2].y, tmpColors[idx2].z);
@@ -142,20 +141,11 @@ public:
 		return LO + static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / (HI - LO)));
 	}
 
-	bool inConnections(Pair p, Pair list[]) {
+	bool isConnected(Pair p, Pair list[]) {
 		for (int i = 0; i < NUM_OF_CONNECTIONS; ++i)
 			if (p == list[i])
 				return true;
 		return false;
-	}
-
-	void initSimulation() {
-		for (int i = 0; i < NUM_OF_VERTICES; ++i)
-			velocities[i] = vec3(0, 0, 0);
-		simulationCycle = 0;
-		drawCycle = 0;
-		startClustering = true;
-		startDynamicSimulation = true;
 	}
 
 	void correctCoordinates() {
@@ -201,37 +191,26 @@ public:
 		correctCoordinates();
 	}
 
-	bool isConnected(const vec3 a, const vec3 b) {
-		for (int l = 0; l < NUM_OF_CONNECTIONS; ++l) {
-			const int idx1 = connections[l].x;
-			const int idx2 = connections[l].y;
-			if ((vertices[idx1].x == a.x && vertices[idx1].y == a.y && vertices[idx2].x == b.x && vertices[idx2].y == b.y) ||
-				(vertices[idx1].x == b.x && vertices[idx1].y == b.y && vertices[idx2].x == a.x && vertices[idx2].y == a.y)) {
-				return true;
-			}
-		}
-		return false;
+	int numOfConnections(unsigned int idx) {
+		int c = 0;
+		for (int i = 0; i < NUM_OF_CONNECTIONS; ++i)
+			if (isConnected(Pair(idx, i), connections))
+				c++;
+		return c;
 	}
 
 	void kMeansClustering() {
 		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
 			//Center of mass calculation with the formula from here:
 			//https://en.wikipedia.org/wiki/Center_of_mass
-			int M = 0; vec3 R(0, 0, 0);
+			vec3 R(0, 0, 0);
 			for (int j = 0; j < NUM_OF_VERTICES; ++j) {
 				if (i == j) continue;
-				if (isConnected(vertices[i], vertices[j])) {
-					R = R + vertices[j];
-					M++;
-				}
-				else {
-					R = R - vertices[j];
-					M--;
-				}
+				if (isConnected(Pair(i,j),connections)) R = R + vertices[j];
+				else R = R - vertices[j];
 			}
-			R = R / M;
-			R.z = sqrtf(R.x * R.x + R.y * R.y + 1);
-			vertices[i] = R;
+			vertices[i] = R / (2 * numOfConnections(i) - NUM_OF_VERTICES + 1);
+			vertices[i].z = sqrtf(R.x * R.x + R.y * R.y + 1);
 		}
 		correctCoordinates();
 	}
@@ -246,8 +225,8 @@ public:
 		float dist = hyperbolicDistance(from, to);
 		float optDist = 0.3;
 		float func = 20 * (dist - optDist) / (dist);
-		if (func < -1) func = -1;
-		vec3 Fe = hyperbolicVelocity(from,to,dist) * func;
+		if (func < -2) func = -2;
+		vec3 Fe = normalize(hyperbolicVelocity(from, to, dist)) * func;
 		handleForceErrors(Fe);
 		return Fe;
 	}
@@ -256,29 +235,28 @@ public:
 		float dist = hyperbolicDistance(from, to);
 		float optDist = 0.3;
 		float func = 5 * ((-1.0) * optDist) / pow(dist,3);
-		if (func < -1) func = -1;
-		vec3 Fn = hyperbolicVelocity(from, to, dist) * func;
+		if (func < -2) func = -2;
+		vec3 Fn = normalize(hyperbolicVelocity(from, to, dist)) * func;
 		handleForceErrors(Fn);
 		return Fn;
 	}
 
 	vec3 Fo(vec3 from) {
 		float dist = hyperbolicDistance(from, vec3(0, 0, 1));
-		float func = 10 * exp(1.5 * dist - 3);
-		vec3 Fo = hyperbolicVelocity(from, vec3(0, 0, 1), dist) * func;
+		float func = 20 * exp(1.5 * dist - 3);
+		vec3 Fo = normalize(hyperbolicVelocity(from, vec3(0, 0, 1), dist)) * func;
 		handleForceErrors(Fo);
 		return Fo;
 	}
 
-	void dynamicSimulation(float dt, float simulationCycle) {
+	void dynamicSimulation() {
 		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
-			vec3 Fi = vec3(0, 0, 0);
+			vec3 Fi = Fo(vertices[i]);
 			for (int j = 0; j < NUM_OF_VERTICES; ++j) {
 				if (i == j) continue;
-				if (isConnected(vertices[i], vertices[j])) { Fi = Fi + Fe(vertices[i], vertices[j]); }
+				if (isConnected(Pair(i, j), connections)) { Fi = Fi + Fe(vertices[i], vertices[j]); }
 				else { Fi = Fi + Fn(vertices[i], vertices[j]); }
-			}
-			Fi = Fi + Fo(vertices[i]);
+			}		
 			Fi = Fi - velocities[i] * rho;
 
 			velocities[i] = (velocities[i] + Fi / m * dt) * damping;
@@ -292,6 +270,15 @@ public:
 		correctCoordinates();
 	}
 
+	void initSimulation() {
+		for (int i = 0; i < NUM_OF_VERTICES; ++i)
+			velocities[i] = vec3(0, 0, 0);
+		simulationCycle = 0;
+		drawCycle = 0;
+		startClustering = true;
+		startDynamicSimulation = true;
+	}
+
 	void controlSimulation() {
 		if (startClustering) {
 			kMeansClustering();
@@ -299,7 +286,7 @@ public:
 			startClustering = false;
 		}
 		if (startDynamicSimulation && simulationCycle < T) {
-			dynamicSimulation(dt, simulationCycle);
+			dynamicSimulation();
 			if (drawCycle % drawCount == 0) draw();
 			simulationCycle += dt;
 			++drawCycle;
@@ -344,7 +331,7 @@ public:
 		gpuProgram.setUniform((int)false, "isTextured");
 		glBindVertexArray(vao0);
 		glBindBuffer(GL_ARRAY_BUFFER, vbo0);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * NUM_OF_CONNECTIONS * 2, connected, GL_DYNAMIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(connected), connected, GL_DYNAMIC_DRAW);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
 		int location = glGetUniformLocation(gpuProgram.getId(), "color");
@@ -354,6 +341,7 @@ public:
 		for (int i = 0; i < NUM_OF_VERTICES; ++i) {
 			const int nv = 50;
 			vec3 circleVertices[nv];
+			vec2 uvs[nv];
 			for (int j = 0; j < nv; ++j) {
 				float fi = j * 2.0 * M_PI / nv;
 				vec3 tmp = vertices[i];
@@ -362,18 +350,13 @@ public:
 				float shiftY = sinf(fi) * r;
 				shiftVertex(vec3(0, 0, 1), vec3(shiftX, shiftY, sqrtf(shiftX * shiftX + shiftY * shiftY + 1)), tmp);
 				circleVertices[j] = tmp;
-			}
-			vec2 uvs[50];
-			for (int i = 0; i < nv; ++i) {
-				float fi = i * 2.0 * M_PI / nv;
-				uvs[i] = vec2(0.5, 0.5) + vec2(cosf(fi) / 2, sinf(fi) / 2);
+				uvs[j] = vec2(0.5, 0.5) + vec2(cosf(fi) / 2, sinf(fi) / 2);
 			}
 
 			int width = 100, height = 100;
 			std::vector<vec4> image(width * height);
-			for (int j = 0; j < width * height; ++j) {
+			for (int j = 0; j < width * height; ++j)
 				image.at(j) = vec4((vertices[i].x / vertices[i].z) + 0.35, (vertices[i].y / vertices[i].z) + 0.35, (1 / vertices[i].z) + 0.35, 1);
-			}
 			for (int x = width * 0.17; x < width * 0.83; ++x)
 				for (int y = height * 0.17; y < height * 0.83; ++y)
 					image.at(x * width + y) = vec4(1,1,1,1);
@@ -391,7 +374,7 @@ public:
 			gpuProgram.setUniform(texture, "textureUnit");
 			glBindVertexArray(vao1);
 			glBindBuffer(GL_ARRAY_BUFFER, vbo1[0]);
-			glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * nv, circleVertices, GL_DYNAMIC_DRAW);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(circleVertices), circleVertices, GL_DYNAMIC_DRAW);
 			glEnableVertexAttribArray(0);
 			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
 			glBindBuffer(GL_ARRAY_BUFFER, vbo1[1]);
