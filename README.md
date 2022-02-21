@@ -1,13 +1,13 @@
-# Hyperbolic-Graph-Viewer
-## Feladat specifikáció 
-Készítsen programot, amely egy véletlen gráfot esztétikusan megjelenít és lehetőséget ad a felhasználónak annak tetszőleges részének kinagyítására, mialatt a maradék rész még mindig látszik. A gráf 50 csomópontból áll, telítettsége 5%-os (a lehetséges élek 5% valódi él). Az esztétikus elrendezés érdekében a csomópontok helyét egyrészt heurisztikával, másrészt a hiperbolikus sík szabályainak megfelelő erő-vezérelt gráfrajzoló algoritmussal kell meghatározni a SPACE lenyomásának hatására.
+# Hyperbolic Graph Viewer
+## Specification 
+Create a program that displays a random graph aesthetically and allows the user to zoom in on any part of it while the remaining part is still visible. The graph consists of 50 nodes with a saturation of 5% (5% of possible edges are real edges). To achieve an aesthetic layout, the positions of the nodes are determined by both heuristics and a force-driven graph-fitting algorithm that follows the rules of the hyperbolic plane under the effect of pressing the SPACE button.
 
-A fókuszálás érdekében a gráfot a hiperbolikus síkon kell elrendezni és a Beltrami-Klein módszerrel a képernyőre vetíteni. A fókuszálás úgy történik, hogy a gráfot a hiperbolikus síkon eltoljuk úgy, hogy az érdekes rész a hiperboloid aljára kerüljön. Az eltolás képi vetülete az egér jobb gombjának lenyomása és lenyomott állapotbeli egérmozgatás pillanatnyi helyének a különbsége.
+For focusing, the graph is arranged in the hyperbolic plane and projected onto the screen using the Beltrami-Klein method. Focusing is done by shifting the graph in the hyperbolic plane so that the part of interest is placed at the bottom of the hyperboloid. The visual projection of the offset is the difference between the momentary position of the right mouse button press and the momentary position of the mouse movement in the pressed state.
 
-Az egyes csomópontok a hiperbolikus sík körei, amelyek a csomópontot azonosító textúrával bírnak.
+Each node is a circle of the hyperbolic plane with a texture identifying the node.
 
-## Futási eredmények
+## Results
 ### Raw input:
-![enter image description here](https://i.imgur.com/LbEcYDF.png)
+![Raw input](https://i.imgur.com/LbEcYDF.png)
 ### Force directed output:
-![enter image description here](https://i.imgur.com/TbimNrk.png)
+![Force directed output](https://i.imgur.com/TbimNrk.png)
